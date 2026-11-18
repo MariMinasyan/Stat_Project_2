@@ -1,7 +1,7 @@
 ---
 title: "How Top-Heavy Is Global Wealth? A Pareto Model for the Forbes Billionaires of 2021"
 subtitle: "AUA CS 108 Statistics, Fall 2026 --- Project 2: Point Estimation and Confidence Intervals in Practice"
-author: "Group members: <Name 1>, <Name 2>, <Name 3>"
+author: "Group members: Mari Minasyan,  Aida Kirakosyan, Liana Petrosyan"
 date: "November 2026"
 output:
   html_document:
@@ -23,7 +23,7 @@ SEED      <- 2026          # fixed seed for ALL simulations
 B_SIM     <- 5000          # replications in the simulation studies
 B_BOOT    <- 1000          # replications of the parametric bootstrap GOF test
 LEVEL     <- 0.95          # confidence level
-DATA_FILE <- "Billionaire.csv"   # put the Kaggle CSV next to this .Rmd
+DATA_FILE <- "Billionaires.csv"   # put the Kaggle CSV next to this .Rmd
 set.seed(SEED)
 ```
 
@@ -137,7 +137,7 @@ name_col <- grep("^name$|person", names(raw), ignore.case = TRUE, value = TRUE)[
 if (!is.na(name_col)) cat("Duplicated names:", sum(duplicated(raw[[name_col]])), "\n")
 
 # --- 5. observations below the Forbes cut-off of $1B (should be none)
-XM <- 1                                  # known truncation threshold ($1B)
+XM <- 4                                  # known truncation threshold ($1B)
 n_below <- sum(nw < XM, na.rm = TRUE)
 cat("Observations below the $1B threshold:", n_below, "\n")
 

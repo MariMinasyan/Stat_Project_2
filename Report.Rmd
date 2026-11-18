@@ -7,7 +7,7 @@ output:
   html_document:
     toc: true
     toc_depth: 2
-    number_sections: true
+    
     df_print: paged
   pdf_document:
     toc: true
@@ -27,24 +27,24 @@ DATA_FILE <- "Billionaires.csv"   # put the Kaggle CSV next to this .Rmd
 set.seed(SEED)
 ```
 
-# Problem Description
+# 1. Problem Description
 
 **Practical question.** People often say that "a tiny minority owns most of the wealth". Can we put a number on how top-heavy the wealth of the world's richest people is? Within the group of billionaires itself, how strongly is wealth concentrated at the very top: how much do the richest 1%, 5% or 10% of billionaires own out of the total billionaire wealth?
 
 **Parameter of interest.** Wealth above a high level is classically modelled by the **Pareto distribution** (Pareto, 1896). Its *tail index* $\alpha>0$ measures how heavy the tail is: the smaller $\alpha$, the more concentrated the wealth. Our main parameter is $\alpha$. We also estimate functions of $\alpha$ that answer the practical question:
 
-* the **tail probability** $P(X>x)=x^{-\alpha}$ (for a billionaire's wealth in billions of USD, with threshold \$1B),
+* the **tail probability** $P(X>x)=x^{-\alpha}$ (for a billionaire's wealth in billions of USD, with threshold \$4B),
 * the **top share** $S(p)$ = share of the total wealth owned by the richest fraction $p$ of billionaires,
 * the **Gini coefficient** of billionaire wealth, $G=1/(2\alpha-1)$,
 * the value of $\alpha$ for which the "80/20 rule" holds.
 
 **Data-generating mechanism and assumptions.**
 
-* One observation is the net worth (in billions of USD) of one person on the Forbes 2021 list. Forbes includes only people with net worth of at least \$1B, so the data are **left-truncated at a known threshold** $x_m = 1$ (billion USD). This is exactly the situation where the Pareto model is natural, because a Pareto variable conditioned to exceed a threshold is again Pareto with the same $\alpha$.
+* One observation is the net worth (in billions of USD) of one person on the Forbes 2021 list. Forbes includes only people with net worth of at least \$4B, so the data are **left-truncated at a known threshold** $x_m = 1$ (billion USD). This is exactly the situation where the Pareto model is natural, because a Pareto variable conditioned to exceed a threshold is again Pareto with the same $\alpha$.
 * We treat the observations as i.i.d. from a Pareto distribution above $x_m$. This is an approximation: the list is a (near) census of billionaires rather than a random sample, and some fortunes are linked (families, shared companies). We discuss consequences in the conclusions.
 * Net worths are published rounded to \$0.1B, so there are many ties. We account for this in the goodness-of-fit test (rounded bootstrap samples) and examine sensitivity to the threshold.
 
-# The Model
+# 2. The Model
 
 ## Pareto (Type I) distribution
 
@@ -91,7 +91,7 @@ For $\alpha\le1$ the mean is infinite and $S(p)=1$ in the limit. $S(p)$ is a dec
 
 *80/20 rule.* Solving $0.2^{\,1-1/\alpha}=0.8$ gives $\alpha_{80/20}=\dfrac{1}{1-\ln0.8/\ln0.2}\approx 1.161$.
 
-# Dataset
+# 3. Dataset
 
 **Source.** *Forbes Billionaires of 2021* (Kaggle, user `roysouravcu`): <https://www.kaggle.com/datasets/roysouravcu/forbes-billionaires-of-2021>. The original data are the Forbes World's Billionaires List 2021 (<https://www.forbes.com/billionaires/>).
 
@@ -136,8 +136,8 @@ if (max(nw, na.rm = TRUE) > 1000) {
 name_col <- grep("^name$|person", names(raw), ignore.case = TRUE, value = TRUE)[1]
 if (!is.na(name_col)) cat("Duplicated names:", sum(duplicated(raw[[name_col]])), "\n")
 
-# --- 5. observations below the Forbes cut-off of $1B (should be none)
-XM <- 4                                  # known truncation threshold ($1B)
+# --- 5. observations below the Forbes cut-off of $4B (should be none)
+XM <- 4                                  # known truncation threshold ($4B)
 n_below <- sum(nw < XM, na.rm = TRUE)
 cat("Observations below the $1B threshold:", n_below, "\n")
 
@@ -158,7 +158,7 @@ cat("Share of observations equal to the minimum:", round(mean(x == min(x)), 3), 
 
 **Independence.** The observations are not a random sample: Forbes lists (nearly) *all* billionaires, so there is no sampling randomness in the usual sense; the "randomness" is the stochastic mechanism that generated fortunes. Some fortunes are related (family members, the same company). We treat the values as i.i.d. draws from the Pareto model and discuss this limitation in the conclusions.
 
-# Is the Pareto Model Reasonable for These Data?
+# 4. Is the Pareto Model Reasonable for These Data?
 
 ## Fitted model used in the diagrams
 
@@ -306,7 +306,7 @@ p_boot <- (1 + sum(D_boot >= D_obs)) / (B_BOOT + 1)
 cat("Observed D =", round(D_obs, 4), "  bootstrap p-value =", round(p_boot, 4), "\n")
 ```
 
-# Estimators and Their Properties
+# 5. Estimators and Their Properties
 
 We work with $x_m=1$ known (the Forbes cut-off), so there is one unknown parameter $\alpha$. Recall $T=\sum\ln(X_i/x_m)\sim\text{Gamma}(n,\text{rate }\alpha)$.
 
@@ -463,7 +463,7 @@ cat("alpha for the 80/20 rule:", round(alpha_8020, 3), "\n")
 
 **Interpretation.** A **smaller** $\alpha$ means a heavier tail and more concentration. The table compares the model-implied top shares (computed from $\hat\alpha$) with the shares actually observed in the sample; differences measure how far the Pareto approximation is from the data. If $\hat\alpha\le1$, the Pareto model would imply an infinite mean, which is not credible in a finite population; this would show that the fitted Pareto is only an approximation for the observed range of wealth.
 
-# Confidence Intervals
+# 6. Confidence Intervals
 
 ## Construction
 
@@ -618,7 +618,7 @@ Hence our sample of $n=$ `r n` observations gives a relative margin of error of 
 
 # Conclusions
 
-1. **Problem and model.** We asked how top-heavy the wealth of billionaires is. Net worths above Forbes' \$1B cut-off were modelled by a Pareto distribution with known threshold $x_m=1$ and unknown tail index $\alpha$; concentration measures (top shares, Gini) are functions of $\alpha$.
+1. **Problem and model.** We asked how top-heavy the wealth of billionaires is. Net worths above Forbes' \$1B cut-off were modelled by a Pareto distribution with known threshold $x_m=4$ and unknown tail index $\alpha$; concentration measures (top shares, Gini) are functions of $\alpha$.
 2. **Model fit.** The graphical diagnostics (log-histogram, log-log survival plot, QQ plot, ECDF), the AIC comparison with a truncated log-normal, the threshold-stability table and the bootstrap KS test (p-value `r round(p_boot, 4)`) assess the model. Report in your presentation where the plots depart from the line: typically at the lower end (rounding of fortunes near \$1B) and at the very top (few observations). The Pareto model is an approximation (principle 9.1); the threshold table shows how sensitive $\alpha$ is to where the power law is assumed to start.
 3. **Estimators.** The MLE $n/T$ is biased upward by the factor $n/(n-1)$; the UMVUE $(n-1)/T$ is the unique unbiased function of the complete sufficient statistic; $(n-2)/T$ minimises the MSE. We recommend the **UMVUE** (unbiased, MVUE) or the MLE (practically identical for $n=$ `r n`). The method of moments is inefficient and unreliable when $\alpha\le2$, as simulations confirmed.
 4. **Estimates.** $\hat\alpha_{ML}=$ `r round(a_mle, 3)` (SE `r round(a_mle/sqrt(n), 3)`), $\hat\alpha_{UMVUE}=$ `r round(a_u, 3)`. According to the model, the richest 1% of billionaires own about `r round(100*top_share(a_u, 0.01), 1)`% and the richest 10% about `r round(100*top_share(a_u, 0.10), 1)`% of the total billionaire wealth; the Gini coefficient within the billionaire class is about `r round(gini_par(a_u), 2)`. The values are compared with the observed shares in the table of Section 5.4.

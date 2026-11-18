@@ -1,0 +1,642 @@
+---
+title: "How Top-Heavy Is Global Wealth? A Pareto Model for the Forbes Billionaires of 2021"
+subtitle: "AUA CS 108 Statistics, Fall 2026 --- Project 2: Point Estimation and Confidence Intervals in Practice"
+author: "Group members: <Name 1>, <Name 2>, <Name 3>"
+date: "November 2026"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    df_print: paged
+  pdf_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center", fig.width = 7, fig.height = 4.5)
+
+# ---------------- Global settings (change only here) ----------------
+SEED      <- 2026          # fixed seed for ALL simulations
+B_SIM     <- 5000          # replications in the simulation studies
+B_BOOT    <- 1000          # replications of the parametric bootstrap GOF test
+LEVEL     <- 0.95          # confidence level
+DATA_FILE <- "Billionaire.csv"   # put the Kaggle CSV next to this .Rmd
+set.seed(SEED)
+```
+
+# Problem Description
+
+**Practical question.** People often say that "a tiny minority owns most of the wealth". Can we put a number on how top-heavy the wealth of the world's richest people is? Within the group of billionaires itself, how strongly is wealth concentrated at the very top: how much do the richest 1%, 5% or 10% of billionaires own out of the total billionaire wealth?
+
+**Parameter of interest.** Wealth above a high level is classically modelled by the **Pareto distribution** (Pareto, 1896). Its *tail index* $\alpha>0$ measures how heavy the tail is: the smaller $\alpha$, the more concentrated the wealth. Our main parameter is $\alpha$. We also estimate functions of $\alpha$ that answer the practical question:
+
+* the **tail probability** $P(X>x)=x^{-\alpha}$ (for a billionaire's wealth in billions of USD, with threshold \$1B),
+* the **top share** $S(p)$ = share of the total wealth owned by the richest fraction $p$ of billionaires,
+* the **Gini coefficient** of billionaire wealth, $G=1/(2\alpha-1)$,
+* the value of $\alpha$ for which the "80/20 rule" holds.
+
+**Data-generating mechanism and assumptions.**
+
+* One observation is the net worth (in billions of USD) of one person on the Forbes 2021 list. Forbes includes only people with net worth of at least \$1B, so the data are **left-truncated at a known threshold** $x_m = 1$ (billion USD). This is exactly the situation where the Pareto model is natural, because a Pareto variable conditioned to exceed a threshold is again Pareto with the same $\alpha$.
+* We treat the observations as i.i.d. from a Pareto distribution above $x_m$. This is an approximation: the list is a (near) census of billionaires rather than a random sample, and some fortunes are linked (families, shared companies). We discuss consequences in the conclusions.
+* Net worths are published rounded to \$0.1B, so there are many ties. We account for this in the goodness-of-fit test (rounded bootstrap samples) and examine sensitivity to the threshold.
+
+# The Model
+
+## Pareto (Type I) distribution
+
+$X\sim \text{Pareto}(\alpha, x_m)$ with scale (threshold) $x_m>0$ and shape (tail index) $\alpha>0$:
+
+$$
+f(x)=\frac{\alpha\,x_m^{\alpha}}{x^{\alpha+1}},\quad x\ge x_m,\qquad
+F(x)=1-\Big(\frac{x_m}{x}\Big)^{\alpha},\qquad
+Q(u)=x_m(1-u)^{-1/\alpha}.
+$$
+
+$$
+E X=\frac{\alpha x_m}{\alpha-1}\ (\alpha>1),\qquad
+\operatorname{Var}X=\frac{\alpha x_m^2}{(\alpha-1)^2(\alpha-2)}\ (\alpha>2).
+$$
+
+The mean is infinite for $\alpha\le 1$ and the variance is infinite for $\alpha\le 2$. This matters for the method of moments (Section 5).
+
+**Key fact used throughout.** If $X\sim\text{Pareto}(\alpha,x_m)$ then $\ln(X/x_m)\sim\text{Exp}(\text{rate }\alpha)$. Hence, for an i.i.d. sample,
+$$
+T=\sum_{i=1}^n \ln\frac{X_i}{x_m}\sim\text{Gamma}(n,\ \text{rate }\alpha),\qquad\text{equivalently}\qquad 2\alpha T\sim\chi^2_{2n}.
+$$
+
+## Why a Pareto model?
+
+* **Support and shape.** The data are positive, strongly right-skewed and truncated from below at \$1B.
+* **Literature.** Power-law tails of wealth have been documented since Pareto (1896); see Newman (2005) and Clauset, Shalizi and Newman (2009).
+* **Mechanism.** Multiplicative growth with a lower reflecting barrier, or "rich get richer" processes, produce Pareto tails.
+* **Tail closure.** If wealth above some level is Pareto, wealth above any higher level is Pareto with the same $\alpha$. This gives us a natural *robustness check*: estimate $\alpha$ for different thresholds $u$.
+
+**Competing model.** We compare the Pareto with a **log-normal distribution left-truncated at \$1B** (the typical alternative for wealth and income data) using likelihood and AIC.
+
+## Functions of the parameter (derivations)
+
+*Top share.* Let $q=x_m p^{-1/\alpha}$ be the point above which a fraction $p$ of the population lies. For $\alpha>1$,
+$$
+S(p)=\frac{\int_q^\infty x f(x)\,dx}{E X}
+=\frac{\alpha x_m^\alpha q^{1-\alpha}/(\alpha-1)}{\alpha x_m/(\alpha-1)}
+=\Big(\frac{q}{x_m}\Big)^{1-\alpha}=p^{\,1-1/\alpha}.
+$$
+For $\alpha\le1$ the mean is infinite and $S(p)=1$ in the limit. $S(p)$ is a decreasing function of $\alpha$.
+
+*Gini coefficient.* For $\alpha>1$: $G=\dfrac{1}{2\alpha-1}$, decreasing in $\alpha$.
+
+*80/20 rule.* Solving $0.2^{\,1-1/\alpha}=0.8$ gives $\alpha_{80/20}=\dfrac{1}{1-\ln0.8/\ln0.2}\approx 1.161$.
+
+# Dataset
+
+**Source.** *Forbes Billionaires of 2021* (Kaggle, user `roysouravcu`): <https://www.kaggle.com/datasets/roysouravcu/forbes-billionaires-of-2021>. The original data are the Forbes World's Billionaires List 2021 (<https://www.forbes.com/billionaires/>).
+
+**One observation** = one billionaire on the 2021 list. **Population/context:** the world's billionaires as of the 2021 ranking. **Variable used:** `NetWorth`, the net worth in **billions of US dollars**. Additional variables (country, industry) are used only in a small supplementary comparison.
+
+> Download the CSV from Kaggle and place it in the same folder as this `.Rmd` (default name `Forbes Billionaires of 2021.csv`). The code below also searches the working directory for any file matching `forbes*.csv`.
+
+## Data import and preparation
+
+```{r data-import}
+if (!file.exists(DATA_FILE)) {
+  cand <- list.files(".", pattern = "forbes.*\\.csv$", ignore.case = TRUE, recursive = TRUE)
+  if (length(cand) == 0) stop("Dataset not found. Place the Kaggle CSV next to this .Rmd file.")
+  DATA_FILE <- cand[1]
+}
+raw <- read.csv(DATA_FILE, stringsAsFactors = FALSE, check.names = FALSE)
+cat("File used:", DATA_FILE, "\n")
+cat("Rows:", nrow(raw), " Columns:", ncol(raw), "\n")
+str(raw)
+head(raw)
+```
+
+```{r data-clean}
+# --- 1. locate the net-worth column and convert strings such as "$177 B" to numbers
+nw_col <- grep("net ?worth|networth|wealth", names(raw), ignore.case = TRUE, value = TRUE)[1]
+if (is.na(nw_col)) stop("No net-worth column found; check names(raw).")
+nw_raw <- raw[[nw_col]]
+nw <- if (is.numeric(nw_raw)) nw_raw else as.numeric(gsub("[^0-9.]", "", nw_raw))
+cat("Net-worth column used:", nw_col, "\n")
+
+# --- 2. missing values
+n_na <- sum(is.na(nw))
+cat("Missing / unparseable net-worth values:", n_na, "\n")
+
+# --- 3. units check (we need billions of USD)
+if (max(nw, na.rm = TRUE) > 1000) {
+  message("Values look like millions of USD; dividing by 1000 to express them in billions.")
+  nw <- nw / 1000
+}
+
+# --- 4. duplicates (same person listed twice?)
+name_col <- grep("^name$|person", names(raw), ignore.case = TRUE, value = TRUE)[1]
+if (!is.na(name_col)) cat("Duplicated names:", sum(duplicated(raw[[name_col]])), "\n")
+
+# --- 5. observations below the Forbes cut-off of $1B (should be none)
+XM <- 1                                  # known truncation threshold ($1B)
+n_below <- sum(nw < XM, na.rm = TRUE)
+cat("Observations below the $1B threshold:", n_below, "\n")
+
+x <- nw[!is.na(nw) & nw >= XM]
+n <- length(x)
+cat("Final sample size n =", n, "\n")
+```
+
+**What we removed and why.** We removed only the `r n_na` observation(s) with a missing net worth and the `r n_below` observation(s) below \$1B (they contradict the definition of the list; the number is printed above). Nothing else was modified or deleted. (If both numbers are 0, the data were used exactly as published.)
+
+```{r data-summary}
+summary(x)
+tab_top <- data.frame(Rank = 1:5, NetWorth_B = sort(x, decreasing = TRUE)[1:5])
+knitr::kable(tab_top, caption = "Five largest fortunes in the sample (USD billions)")
+cat("Number of distinct values:", length(unique(x)), " of ", n, "\n")
+cat("Share of observations equal to the minimum:", round(mean(x == min(x)), 3), "\n")
+```
+
+**Independence.** The observations are not a random sample: Forbes lists (nearly) *all* billionaires, so there is no sampling randomness in the usual sense; the "randomness" is the stochastic mechanism that generated fortunes. Some fortunes are related (family members, the same company). We treat the values as i.i.d. draws from the Pareto model and discuss this limitation in the conclusions.
+
+# Is the Pareto Model Reasonable for These Data?
+
+## Fitted model used in the diagrams
+
+With the threshold $x_m=1$ known, the MLE is $\hat\alpha=n/T$ (derived in Section 5). We compute it here only to draw the diagnostic plots.
+
+```{r helpers}
+# ---- Pareto functions ---------------------------------------------------
+dpareto <- function(x, alpha, xm = 1) ifelse(x < xm, 0, alpha * xm^alpha / x^(alpha + 1))
+ppareto <- function(x, alpha, xm = 1) ifelse(x < xm, 0, 1 - (xm / x)^alpha)
+qpareto <- function(p, alpha, xm = 1) xm * (1 - p)^(-1 / alpha)
+rpareto <- function(n, alpha, xm = 1) xm * runif(n)^(-1 / alpha)
+
+# ---- estimators (xm known) ----------------------------------------------
+T_stat    <- function(x, xm = 1) sum(log(x / xm))
+alpha_mle <- function(x, xm = 1) length(x) / T_stat(x, xm)
+alpha_unb <- function(x, xm = 1) (length(x) - 1) / T_stat(x, xm)   # UMVUE
+alpha_mse <- function(x, xm = 1) (length(x) - 2) / T_stat(x, xm)   # minimum-MSE multiple of 1/T
+alpha_mom <- function(x, xm = 1) { m <- mean(x); m / (m - xm) }   # method of moments
+
+# ---- functions of alpha -------------------------------------------------
+top_share <- function(alpha, p) ifelse(alpha > 1, p^(1 - 1 / alpha), 1)
+gini_par  <- function(alpha) ifelse(alpha > 1, 1 / (2 * alpha - 1), 1)
+alpha_8020 <- 1 / (1 - log(0.8) / log(0.2))
+
+alpha_hat <- alpha_mle(x, XM)
+Tn <- T_stat(x, XM)
+cat("alpha_hat (MLE) =", round(alpha_hat, 4), "\n")
+```
+
+## Graphical methods
+
+```{r} 
+par(mfrow = c(2, 2), mar = c(4.2, 4.2, 3, 1))
+
+# (a) histogram of log(X/xm) with fitted exponential density  [Pareto <=> log is exponential]
+lx <- log(x / XM)
+hist(lx, breaks = 40, freq = FALSE, col = "grey85", border = "white",
+     main = expression("(a) Histogram of " * ln(X / x[m])), xlab = expression(ln(X / x[m])))
+curve(dexp(x, rate = alpha_hat), add = TRUE, col = "red", lwd = 2)
+
+# (b) log-log survival plot: Pareto => straight line with slope -alpha
+xs <- sort(x); surv <- 1 - (seq_len(n) - 0.5) / n
+plot(xs, surv, log = "xy", pch = 16, cex = 0.5, col = "grey30",
+     xlab = "Net worth x (USD bn, log scale)", ylab = "P(X > x) (log scale)",
+     main = "(b) Empirical survival function (log-log)")
+curve(XM^alpha_hat * x^(-alpha_hat), add = TRUE, col = "red", lwd = 2, from = XM, to = max(x))
+legend("bottomleft", legend = c("data", "fitted Pareto"), col = c("grey30", "red"),
+       pch = c(16, NA), lty = c(NA, 1), bty = "n")
+
+# (c) QQ plot against fitted Pareto (log-log)
+pp <- (seq_len(n) - 0.5) / n
+tq <- qpareto(pp, alpha_hat, XM)
+plot(tq, xs, log = "xy", pch = 16, cex = 0.5, col = "grey30",
+     xlab = "Theoretical Pareto quantiles", ylab = "Sample quantiles",
+     main = "(c) Pareto QQ plot (log-log)")
+abline(0, 1, col = "red", lwd = 2)
+
+# (d) ECDF with fitted CDF (x on log scale)
+plot(ecdf(x), log = "x", verticals = FALSE, do.points = FALSE, col = "grey30", lwd = 2,
+     xlim = c(XM, max(x)), main = "(d) Empirical and fitted CDF", xlab = "Net worth x (USD bn, log scale)",
+     ylab = "F(x)")
+curve(ppareto(x, alpha_hat, XM), add = TRUE, col = "red", lwd = 2, from = XM, to = max(x))
+```
+
+**How to read the plots.** If $X$ is Pareto, then (a) $\ln(X/x_m)$ is exponential, (b) the log-log survival plot is a straight line with slope $-\alpha$, and (c) the Pareto QQ plot lies on the diagonal. Systematic bending of the points shows where the model fails (typically the bulk near \$1B, where the rounding to \$0.1B is coarse, or the very top where only a handful of points are observed).
+
+## Competing model: left-truncated log-normal
+
+```{r lognormal}
+nll_ln <- function(par, x) {
+  mu <- par[1]; s <- exp(par[2])
+  -sum(dlnorm(x, mu, s, log = TRUE) - plnorm(XM, mu, s, lower.tail = FALSE, log.p = TRUE))
+}
+fit_ln <- optim(c(0, 0), nll_ln, x = x, control = list(maxit = 5000, reltol = 1e-10))
+cat("Optimiser convergence code (0 = OK):", fit_ln$convergence, "\n")
+mu_ln <- fit_ln$par[1]; s_ln <- exp(fit_ln$par[2])
+
+ll_par <- n * log(alpha_hat) - alpha_hat * Tn - sum(log(x))   # Pareto log-likelihood (xm = 1 known)
+ll_ln  <- -fit_ln$value
+cmp <- data.frame(Model = c("Pareto (xm = 1 known)", "Log-normal truncated at 1"),
+                  Parameters = c(1, 2),
+                  logLik = c(ll_par, ll_ln),
+                  AIC = c(2 * 1 - 2 * ll_par, 2 * 2 - 2 * ll_ln))
+knitr::kable(cmp, digits = 2, caption = "Pareto against truncated log-normal")
+```
+
+```{r lognormal-plot}
+plot(xs, surv, log = "xy", pch = 16, cex = 0.5, col = "grey30",
+     xlab = "Net worth x (USD bn, log scale)", ylab = "P(X > x) (log scale)",
+     main = "Survival function: data, Pareto and truncated log-normal")
+curve(XM^alpha_hat * x^(-alpha_hat), add = TRUE, col = "red", lwd = 2, from = XM, to = max(x))
+curve(plnorm(x, mu_ln, s_ln, lower.tail = FALSE) / plnorm(XM, mu_ln, s_ln, lower.tail = FALSE),
+      add = TRUE, col = "blue", lwd = 2, from = XM, to = max(x))
+legend("bottomleft", legend = c("data", "Pareto", "truncated log-normal"),
+       col = c("grey30", "red", "blue"), pch = c(16, NA, NA), lty = c(NA, 1, 1), bty = "n")
+```
+
+The AIC (smaller is better) and the plot compare the two models. The log-normal has one more parameter and can be more flexible, so it can fit the bulk better; the question is which one describes the **upper tail**, which is what matters for concentration. We examine this next by varying the threshold.
+
+## Sensitivity to the threshold (tail-closure check)
+
+If the Pareto model is right above $\$1$B, then it is right above *any* higher threshold $u$ with the same $\alpha$. We fit $\alpha$ using only the observations $X\ge u$ (then $\ln(X/u)$ is again exponential given $X\ge u$).
+
+```{r threshold}
+thr <- c(1, 1.5, 2, 3, 5, 8, 10, 15)
+thr_tab <- do.call(rbind, lapply(thr, function(u) {
+  xu <- x[x >= u]; nu <- length(xu); Tu <- sum(log(xu / u))
+  a  <- nu / Tu
+  ci <- qchisq(c((1 - LEVEL) / 2, 1 - (1 - LEVEL) / 2), 2 * nu) / (2 * Tu)
+  data.frame(u = u, n_u = nu, alpha_hat = a, SE = a / sqrt(nu), CI_low = ci[1], CI_up = ci[2])
+}))
+knitr::kable(thr_tab, digits = 3, caption = "MLE of alpha for different thresholds u (exact 95% CIs)")
+```
+
+```{r threshold-plot}
+plot(thr_tab$u, thr_tab$alpha_hat, type = "b", pch = 16, log = "x", ylim = range(thr_tab[, c("CI_low", "CI_up")]),
+     xlab = "Threshold u (USD bn, log scale)", ylab = expression(hat(alpha)(u)),
+     main = "Stability of the tail index estimate")
+segments(thr_tab$u, thr_tab$CI_low, thr_tab$u, thr_tab$CI_up)
+abline(h = alpha_hat, lty = 2, col = "red")
+```
+
+A roughly horizontal curve supports the Pareto model; a drift indicates that the tail is not exactly Pareto (e.g. the bulk near \$1B is curved), and then the estimate depends on where we start the power law.
+
+## Formal goodness-of-fit test (parametric bootstrap Kolmogorov--Smirnov)
+
+* $H_0$: the data come from a Pareto$(\alpha,1)$ distribution for some $\alpha$; $H_1$: they do not.
+* Test statistic: $D_n=\sup_x|F_n(x)-F_{\hat\alpha}(x)|$, where $F_n$ is the empirical CDF.
+* Because $\alpha$ is *estimated* from the same data and the data are *rounded* (ties), the classical Kolmogorov distribution is not valid. We therefore obtain the null distribution of $D_n$ by a **parametric bootstrap**: simulate samples of size $n$ from Pareto$(\hat\alpha,1)$, round them to \$0.1B as in the data, re-estimate $\alpha$, recompute $D_n$. The p-value is the proportion of bootstrap statistics at least as large as the observed one.
+* A small p-value is evidence against $H_0$. With $n$ in the thousands even tiny, practically unimportant departures are rejected, so the test **complements** the graphs and does not replace them (principle 9.1).
+
+```{r ks-boot}
+ks_stat <- function(x, alpha, xm = 1) {
+  x <- sort(x); n <- length(x); F <- ppareto(x, alpha, xm)
+  max(pmax(abs((1:n) / n - F), abs(F - (0:(n - 1)) / n)))
+}
+D_obs <- ks_stat(x, alpha_hat, XM)
+set.seed(SEED)
+D_boot <- replicate(B_BOOT, {
+  xb <- round(rpareto(n, alpha_hat, XM), 1)
+  xb <- pmax(xb, XM)
+  ks_stat(xb, alpha_mle(xb, XM), XM)
+})
+p_boot <- (1 + sum(D_boot >= D_obs)) / (B_BOOT + 1)
+cat("Observed D =", round(D_obs, 4), "  bootstrap p-value =", round(p_boot, 4), "\n")
+```
+
+# Estimators and Their Properties
+
+We work with $x_m=1$ known (the Forbes cut-off), so there is one unknown parameter $\alpha$. Recall $T=\sum\ln(X_i/x_m)\sim\text{Gamma}(n,\text{rate }\alpha)$.
+
+## Construction
+
+**Maximum likelihood.** The likelihood is $L(\alpha)=\alpha^n x_m^{n\alpha}\prod X_i^{-(\alpha+1)}$, so
+$$
+\ell(\alpha)=n\ln\alpha+n\alpha\ln x_m-(\alpha+1)\sum\ln X_i,\qquad
+\ell'(\alpha)=\frac n\alpha-T=0\ \Rightarrow\ \boxed{\hat\alpha_{ML}=\frac nT}.
+$$
+Since $\ell''(\alpha)=-n/\alpha^2<0$, this is a maximum. (When $x_m$ is unknown, the MLE of $x_m$ is $\min X_i$; see Section 5.5.)
+
+**Method of moments.** From $E X=\alpha x_m/(\alpha-1)$ we get $\alpha=\bar X/(\bar X-x_m)$, hence
+$$
+\boxed{\tilde\alpha_{MM}=\frac{\bar X}{\bar X-x_m}}.
+$$
+This requires $\alpha>1$ for the first moment to exist.
+
+**Bias-corrected and minimum-MSE versions.** Since $T\sim\text{Gamma}(n,\alpha)$, we have $E[1/T]=\dfrac{\alpha}{n-1}$ and $E[1/T^2]=\dfrac{\alpha^2}{(n-1)(n-2)}$ (for $n>2$). This suggests the family $c/T$.
+
+```{r estimates}
+est <- c(MLE = alpha_mle(x, XM), UMVUE = alpha_unb(x, XM),
+         MinMSE = alpha_mse(x, XM), MoM = alpha_mom(x, XM))
+print(round(est, 4))
+```
+
+## Properties of the estimators (analytic)
+
+**Bias of the MLE.** $E\hat\alpha_{ML}=nE[1/T]=\dfrac{n}{n-1}\alpha$. The MLE **overestimates** $\alpha$, with bias $\dfrac{\alpha}{n-1}$. It is asymptotically unbiased, hence **consistent** (also, $T/n\to 1/\alpha$ a.s. by the law of large numbers).
+
+**Unbiased version.** $\hat\alpha_{U}=\dfrac{n-1}{n}\hat\alpha_{ML}=\dfrac{n-1}{T}$ is unbiased.
+
+**Variances.** $\operatorname{Var}(1/T)=\dfrac{\alpha^2}{(n-1)(n-2)}-\dfrac{\alpha^2}{(n-1)^2}=\dfrac{\alpha^2}{(n-1)^2(n-2)}$, so
+$$
+\operatorname{Var}(\hat\alpha_{ML})=\frac{n^2\alpha^2}{(n-1)^2(n-2)},\qquad
+\operatorname{Var}(\hat\alpha_{U})=\frac{\alpha^2}{n-2}.
+$$
+
+**MSE and bias-variance decomposition.** For $\hat\alpha_c=c/T$:
+$$
+\operatorname{MSE}(\hat\alpha_c)=\alpha^2\Big[\frac{c^2}{(n-1)(n-2)}-\frac{2c}{n-1}+1\Big].
+$$
+* MLE ($c=n$): $\ \text{MSE}=\alpha^2\dfrac{(n+2)}{(n-1)(n-2)}$ = $\dfrac{\alpha^2 n^2}{(n-1)^2(n-2)}+\dfrac{\alpha^2}{(n-1)^2}$ (variance + bias$^2$).
+* UMVUE ($c=n-1$): $\ \text{MSE}=\dfrac{\alpha^2}{n-2}$.
+* Minimising over $c$: derivative $=0$ gives $c=n-2$, and $\text{MSE}_{\min}=\dfrac{\alpha^2}{n-1}$. So the **minimum-MSE** estimator in this family is $\hat\alpha_{MSE}=(n-2)/T$, which is *biased downwards* but has the smallest MSE for every $n$ and $\alpha$.
+
+**Ranking:** $\text{MSE}(\hat\alpha_{MSE})<\text{MSE}(\hat\alpha_U)<\text{MSE}(\hat\alpha_{ML})$ for all $n>2$; the differences are of order $1/n^2$ and negligible for large $n$.
+
+**Sufficiency, completeness, MVUE.** The density is a one-parameter exponential family in $T$ with natural parameter $-\alpha$ (open range), so $T$ is **complete and sufficient**. By the Lehmann--Scheffé theorem $\hat\alpha_U=(n-1)/T$, an unbiased function of $T$, is the **unique MVUE**.
+
+**Fisher information and the Cramér--Rao bound.** $\ln f=\ln\alpha+\alpha\ln x_m-(\alpha+1)\ln x$, so $\partial^2/\partial\alpha^2\ln f=-1/\alpha^2$ and $I(\alpha)=1/\alpha^2$ per observation. The bound for unbiased estimators is $\alpha^2/n$. The MVUE has variance $\alpha^2/(n-2)>\alpha^2/n$, i.e. **it does not attain the bound** for finite $n$ (the bound is attained only for estimators of the mean parameter $1/\alpha$, not for $\alpha$), but the ratio $n/(n-2)\to1$: the estimator is asymptotically efficient.
+
+**Asymptotics.** $\sqrt n(\hat\alpha_{ML}-\alpha)\xrightarrow{d}N(0,\alpha^2)$, so the estimated standard error is $\widehat{SE}(\hat\alpha_{ML})=\hat\alpha/\sqrt n$. For the UMVUE one can use the exact $\widehat{SE}=\hat\alpha_U/\sqrt{n-2}$.
+
+**Method of moments.** By the delta method with $g(\mu)=\mu/(\mu-1)$, $g'(\mu)=-1/(\mu-1)^2$, and if $\alpha>2$,
+$$
+\operatorname{AVar}(\tilde\alpha_{MM})=\frac{g'(\mu)^2\sigma^2}{n}=\frac{\alpha(\alpha-1)^2}{n(\alpha-2)}.
+$$
+This exceeds the Cramér--Rao bound $\alpha^2/n$ (ratio $=(\alpha-1)^2/(\alpha(\alpha-2))>1$), so MoM is **less efficient**. If $\alpha\le2$ the variance of $X$ is infinite, the CLT does not apply, the MoM estimator converges slowly and is not asymptotically normal; and if $\alpha\le 1$ the population mean does not exist at all and MoM is inconsistent. Since wealth data typically have $\alpha$ close to 1--2, MoM is expected to be poor here, which we verify by simulation.
+
+## Properties by simulation
+
+We fix the true parameter $\alpha_0$ (the rounded estimate from the real data), simulate $B$ samples of each size $n$ and compute the empirical bias, variance and MSE of each estimator. The theoretical values for the MLE are shown for comparison.
+
+```{r sim-props}
+alpha0 <- round(alpha_hat, 2)
+cat("True value used in simulations: alpha0 =", alpha0, "\n")
+
+# T and sample mean for B replications of size n (processed in chunks to save memory)
+sim_stats <- function(B, n, alpha, xm = 1) {
+  chunk <- max(1, floor(2e6 / n)); res <- matrix(NA_real_, B, 2); done <- 0
+  while (done < B) {
+    b <- min(chunk, B - done)
+    X <- xm * matrix(runif(b * n), b, n)^(-1 / alpha)
+    res[done + seq_len(b), ] <- cbind(rowSums(log(X / xm)), rowMeans(X))
+    done <- done + b
+  }
+  colnames(res) <- c("T", "xbar"); res
+}
+
+ns_prop <- c(10, 20, 50, 100, 200, 500, 1000)
+set.seed(SEED)
+prop_tab <- do.call(rbind, lapply(ns_prop, function(nn) {
+  S <- sim_stats(B_SIM, nn, alpha0, XM)
+  E <- cbind(MLE = nn / S[, "T"], UMVUE = (nn - 1) / S[, "T"], MinMSE = (nn - 2) / S[, "T"],
+             MoM = S[, "xbar"] / (S[, "xbar"] - XM))
+  data.frame(n = nn, estimator = colnames(E),
+             bias = colMeans(E) - alpha0, variance = apply(E, 2, var),
+             MSE = colMeans((E - alpha0)^2), row.names = NULL)
+}))
+prop_tab$RMSE <- sqrt(prop_tab$MSE)
+knitr::kable(subset(prop_tab, n %in% c(10, 50, 200, 1000)), digits = 4,
+             caption = "Simulated bias, variance and MSE (selected n)")
+```
+
+```{r sim-props-plot, fig.width=9, fig.height=4}
+par(mfrow = c(1, 2), mar = c(4.2, 4.2, 3, 1))
+cols <- c(MLE = "red", UMVUE = "blue", MinMSE = "darkgreen", MoM = "orange")
+plot(NA, xlim = range(ns_prop), ylim = range(prop_tab$bias), log = "x",
+     xlab = "n", ylab = "Bias", main = "Bias of the estimators")
+for (e in names(cols)) with(subset(prop_tab, estimator == e), lines(n, bias, type = "b", col = cols[e], pch = 16))
+abline(h = 0, lty = 2)
+legend("topright", legend = names(cols), col = cols, pch = 16, lty = 1, bty = "n", cex = 0.8)
+
+plot(NA, xlim = range(ns_prop), ylim = range(prop_tab$MSE), log = "xy",
+     xlab = "n", ylab = "MSE", main = "MSE of the estimators")
+for (e in names(cols)) with(subset(prop_tab, estimator == e), lines(n, MSE, type = "b", col = cols[e], pch = 16))
+nn <- seq(ns_prop[1], ns_prop[length(ns_prop)])
+lines(nn, alpha0^2 * (nn + 2) / ((nn - 1) * (nn - 2)), lty = 2, col = "red")      # theory, MLE
+lines(nn, alpha0^2 / nn, lty = 3)                                                # Cramer-Rao bound
+legend("bottomleft", legend = c("theory MLE", "CR bound a^2/n"), lty = c(2, 3),
+       col = c("red", "black"), bty = "n", cex = 0.8)
+par(mfrow = c(1, 1))
+```
+
+The simulated bias of the MLE matches $\alpha/(n-1)$, the UMVUE is unbiased, the minimum-MSE estimator has the smallest MSE, and MoM is clearly worse (this is the consequence of the infinite or very heavy-tailed moments discussed above). All MSEs decrease like $1/n$ and approach the Cramér--Rao bound.
+
+## Extension: unknown threshold $x_m$
+
+Suppose we did not know the cut-off. Then $\hat x_m=\min X_i$ and $\hat\alpha=n/\sum\ln(X_i/\hat x_m)$. It is known that $T'=\sum\ln(X_i/\hat x_m)\sim\text{Gamma}(n-1,\alpha)$ and is independent of $\hat x_m$, so $(n-2)/T'$ is unbiased. This model is *non-regular* (the support depends on $x_m$; the Cramér--Rao bound does not apply to $x_m$, and $\hat x_m$ converges at rate $1/n$).
+
+```{r unknown-xm}
+xm_hat <- min(x); Tp <- sum(log(x / xm_hat))
+cat("min(x) =", xm_hat, "\n",
+    "alpha_hat (xm estimated) =", round(n / Tp, 4), "\n",
+    "unbiased version =", round((n - 2) / Tp, 4), "\n")
+```
+
+Because the minimum equals the known Forbes cut-off, the two analyses agree, so we continue with $x_m=1$ known.
+
+## Estimates and conclusions about the problem
+
+```{r estimates-final}
+a_mle <- alpha_mle(x, XM); a_u <- alpha_unb(x, XM)
+res <- data.frame(
+  Estimator = c("MLE", "UMVUE", "Min-MSE", "Method of moments"),
+  Estimate  = c(a_mle, a_u, alpha_mse(x, XM), alpha_mom(x, XM)),
+  SE        = c(a_mle / sqrt(n), a_u / sqrt(n - 2), alpha_mse(x, XM) / sqrt(n - 1), NA))
+knitr::kable(res, digits = 4, caption = "Estimates of the tail index alpha with estimated standard errors")
+```
+
+*Standard errors.* MLE: $\hat\alpha/\sqrt n$; UMVUE: $\hat\alpha_U/\sqrt{n-2}$; min-MSE: $\hat\alpha_{MSE}/\sqrt{n-1}$ (root of its MSE, i.e. accounting for bias). For MoM the standard error requires $\alpha>2$ and is unreliable here, so it is not reported.
+
+```{r functions-of-alpha}
+ps <- c(0.01, 0.05, 0.10, 0.20, 0.50)
+emp_share <- sapply(ps, function(p) { k <- ceiling(p * n); sum(sort(x, decreasing = TRUE)[1:k]) / sum(x) })
+shares <- data.frame(Top_fraction = ps, Model_share = top_share(a_u, ps), Empirical_share = emp_share)
+knitr::kable(shares, digits = 3,
+  caption = "Share of total billionaire wealth owned by the richest fraction p of billionaires (model with UMVUE alpha vs. data)")
+cat("Gini (model):", round(gini_par(a_u), 3), "\n")
+cat("Gini (empirical):", round({ s <- sort(x); i <- 1:n; 2 * sum(i * s) / (n * sum(s)) - (n + 1) / n }, 3), "\n")
+cat("alpha for the 80/20 rule:", round(alpha_8020, 3), "\n")
+```
+
+**Interpretation.** A **smaller** $\alpha$ means a heavier tail and more concentration. The table compares the model-implied top shares (computed from $\hat\alpha$) with the shares actually observed in the sample; differences measure how far the Pareto approximation is from the data. If $\hat\alpha\le1$, the Pareto model would imply an infinite mean, which is not credible in a finite population; this would show that the fitted Pareto is only an approximation for the observed range of wealth.
+
+# Confidence Intervals
+
+## Construction
+
+Let $\hat\alpha=n/T$ be the MLE and $z=z_{1-(1-\text{level})/2}$ the normal quantile.
+
+1. **Exact (pivot).** Since $2\alpha T\sim\chi^2_{2n}$ is a pivot,
+$$
+P\Big(\chi^2_{2n,\gamma/2}\le 2\alpha T\le\chi^2_{2n,1-\gamma/2}\Big)=1-\gamma
+\ \Rightarrow\
+\Big[\frac{\chi^2_{2n,\gamma/2}}{2T},\ \frac{\chi^2_{2n,1-\gamma/2}}{2T}\Big].
+$$
+2. **Asymptotic Wald.** $\hat\alpha\pm z\,\hat\alpha/\sqrt n$, from $\sqrt n(\hat\alpha-\alpha)\to N(0,1/I(\alpha))=N(0,\alpha^2)$.
+3. **Wald on the log scale (delta method).** $\operatorname{Var}(\ln\hat\alpha)\approx\frac{1}{\alpha^2}\cdot\frac{\alpha^2}{n}=\frac1n$, so $\ln\hat\alpha\pm z/\sqrt n$, i.e. $\big[\hat\alpha e^{-z/\sqrt n},\ \hat\alpha e^{z/\sqrt n}\big]$. It is always positive and respects the skewness of $\hat\alpha$.
+4. **Likelihood ratio (profile likelihood).** $\{\alpha:\ 2[\ell(\hat\alpha)-\ell(\alpha)]\le\chi^2_{1,\text{level}}\}$. Using $T=n/\hat\alpha$ and $r=\alpha/\hat\alpha$,
+$2[\ell(\hat\alpha)-\ell(\alpha)]=2n\,(r-1-\ln r)$, so the interval is $\hat\alpha\cdot[r_L,r_U]$ where $r_L<1<r_U$ are the two roots of $2n(r-1-\ln r)=\chi^2_{1,\text{level}}$. These roots depend only on $n$ and are found numerically.
+
+```{r ci-functions}
+ci_exact <- function(Tn, n, level = LEVEL) {
+  g <- 1 - level
+  cbind(lower = qchisq(g / 2, 2 * n) / (2 * Tn), upper = qchisq(1 - g / 2, 2 * n) / (2 * Tn))
+}
+ci_wald <- function(Tn, n, level = LEVEL) {
+  a <- n / Tn; z <- qnorm(1 - (1 - level) / 2)
+  cbind(lower = a - z * a / sqrt(n), upper = a + z * a / sqrt(n))
+}
+ci_logwald <- function(Tn, n, level = LEVEL) {
+  a <- n / Tn; z <- qnorm(1 - (1 - level) / 2)
+  cbind(lower = a * exp(-z / sqrt(n)), upper = a * exp(z / sqrt(n)))
+}
+lr_roots <- function(n, level = LEVEL) {
+  crit <- qchisq(level, 1)
+  f <- function(r) 2 * n * (r - 1 - log(r)) - crit
+  c(rL = uniroot(f, c(1e-10, 1), tol = 1e-12)$root,
+    rU = uniroot(f, c(1, 1e4), tol = 1e-12)$root)
+}
+ci_lr <- function(Tn, n, level = LEVEL) {
+  rr <- lr_roots(n, level); a <- n / Tn
+  cbind(lower = a * rr["rL"], upper = a * rr["rU"])
+}
+```
+
+```{r ci-real}
+ci_tab <- rbind(Exact = ci_exact(Tn, n), Wald = ci_wald(Tn, n),
+                `Wald (log scale)` = ci_logwald(Tn, n), `Likelihood ratio` = ci_lr(Tn, n))
+ci_tab <- data.frame(Method = rownames(ci_tab), lower = ci_tab[, 1], upper = ci_tab[, 2],
+                     length = ci_tab[, 2] - ci_tab[, 1], row.names = NULL)
+knitr::kable(ci_tab, digits = 4,
+             caption = paste0(100 * LEVEL, "% confidence intervals for alpha (real data, n = ", n, ")"))
+```
+
+**Interpretation.** The confidence level describes the *procedure*: if we could repeatedly draw samples from the model and build the interval in the same way, about `r 100*LEVEL`% of those intervals would contain the true $\alpha$. It is **not** correct to say that the true $\alpha$ lies in this particular computed interval with probability `r LEVEL`.
+
+## Confidence intervals for functions of $\alpha$
+
+$S(p)=p^{1-1/\alpha}$, $G=1/(2\alpha-1)$ and $P(X>x)=x^{-\alpha}$ are **monotone** (decreasing) functions of $\alpha$ (for $\alpha>1$ in the first two cases). Hence applying the function to the endpoints of the exact interval for $\alpha$ gives an *exact* interval for each of them (the lower endpoint comes from the upper endpoint of $\alpha$ and vice versa), with the same confidence level and no additional approximation. In particular, their coverage equals that of the interval for $\alpha$.
+
+```{r ci-functions-real}
+ci_a <- ci_exact(Tn, n)            # exact CI for alpha
+al <- ci_a[1]; au <- ci_a[2]
+fun_tab <- data.frame(
+  Quantity = c("Top 1% share", "Top 10% share", "Gini coefficient", "P(X > $10B)", "P(X > $50B)"),
+  Estimate = c(top_share(a_mle, 0.01), top_share(a_mle, 0.10), gini_par(a_mle), 10^(-a_mle), 50^(-a_mle)),
+  Lower    = c(top_share(au, 0.01),    top_share(au, 0.10),    gini_par(au),    10^(-au),    50^(-au)),
+  Upper    = c(top_share(al, 0.01),    top_share(al, 0.10),    gini_par(al),    10^(-al),    50^(-al)))
+knitr::kable(fun_tab, digits = 4, caption = "Exact 95% CIs for functions of alpha (point estimates use the MLE)")
+```
+
+Note that the 80/20 value $\alpha_{80/20}=$ `r round(alpha_8020, 3)` is `r if (alpha_8020 >= al & alpha_8020 <= au) "inside" else "outside"` the exact confidence interval for $\alpha$, i.e. the "80/20 rule" for the top 20% of billionaires `r if (alpha_8020 >= al & alpha_8020 <= au) "is compatible with" else "is not compatible with"` the data at the chosen confidence level (the interval can be used as the acceptance region of a test of $H_0:\alpha=\alpha_{80/20}$).
+
+## Supplementary comparison: countries (optional)
+
+```{r country}
+cty_col <- grep("country", names(raw), ignore.case = TRUE, value = TRUE)[1]
+if (!is.na(cty_col)) {
+  d <- data.frame(x = nw, country = raw[[cty_col]])
+  d <- d[!is.na(d$x) & d$x >= XM, ]
+  top_c <- names(sort(table(d$country), decreasing = TRUE))[1:3]
+  cty <- do.call(rbind, lapply(top_c, function(cc) {
+    xc <- d$x[d$country == cc]; nc <- length(xc); Tc <- sum(log(xc / XM))
+    ci <- ci_exact(Tc, nc)
+    data.frame(Country = cc, n = nc, alpha_hat = nc / Tc, CI_low = ci[1], CI_up = ci[2])
+  }))
+  knitr::kable(cty, digits = 3, caption = "Tail index by country (three largest groups); exact 95% CIs")
+}
+```
+
+## Simulation study of the coverage probability
+
+We generate samples **from the Pareto model** with known $\alpha_0$ and $x_m=1$, build the four intervals and record coverage and length. Sample sizes: $n=10,30,100,500$ and the real sample size. $B=$ `r B_SIM` replications (Monte Carlo standard error of a coverage near 0.95 is about $\sqrt{0.95\cdot0.05/B}\approx$ `r round(sqrt(.95*.05/B_SIM), 4)`).
+
+```{r coverage}
+alpha_true <- alpha0                      # true value used in the study
+ns_cov <- sort(unique(c(10, 30, 100, 500, n)))
+set.seed(SEED)
+cov_res <- do.call(rbind, lapply(ns_cov, function(nn) {
+  Tsim <- sim_stats(B_SIM, nn, alpha_true, XM)[, "T"]
+  methods <- list(Exact = ci_exact(Tsim, nn), Wald = ci_wald(Tsim, nn),
+                  `Wald (log)` = ci_logwald(Tsim, nn), `Likelihood ratio` = ci_lr(Tsim, nn))
+  do.call(rbind, lapply(names(methods), function(m) {
+    ci <- methods[[m]]
+    data.frame(n = nn, Method = m,
+               Coverage = mean(ci[, 1] <= alpha_true & alpha_true <= ci[, 2]),
+               AvgLength = mean(ci[, 2] - ci[, 1]),
+               MissLow = mean(ci[, 2] < alpha_true),    # interval entirely below truth
+               MissHigh = mean(ci[, 1] > alpha_true))   # interval entirely above truth
+  }))
+}))
+knitr::kable(cov_res, digits = 4, row.names = FALSE,
+             caption = paste0("Empirical coverage (nominal ", LEVEL, ") and mean length; alpha0 = ", alpha_true))
+```
+
+```{r coverage-plot, fig.width=9, fig.height=4}
+par(mfrow = c(1, 2), mar = c(4.2, 4.2, 3, 1))
+mcols <- c(Exact = "black", Wald = "red", `Wald (log)` = "blue", `Likelihood ratio` = "darkgreen")
+plot(NA, xlim = range(ns_cov), ylim = range(c(cov_res$Coverage, LEVEL)), log = "x",
+     xlab = "n", ylab = "Empirical coverage", main = "Coverage probability")
+for (m in names(mcols)) with(subset(cov_res, Method == m), lines(n, Coverage, type = "b", pch = 16, col = mcols[m]))
+abline(h = LEVEL, lty = 2)
+legend("bottomright", legend = names(mcols), col = mcols, pch = 16, lty = 1, bty = "n", cex = 0.8)
+
+plot(NA, xlim = range(ns_cov), ylim = range(cov_res$AvgLength), log = "xy",
+     xlab = "n", ylab = "Average length", main = "Interval length")
+for (m in names(mcols)) with(subset(cov_res, Method == m), lines(n, AvgLength, type = "b", pch = 16, col = mcols[m]))
+par(mfrow = c(1, 1))
+```
+
+**Discussion (read together with the table above).**
+
+* The **exact** interval has coverage equal to the nominal level for every $n$ (up to Monte Carlo error), because it is based on a true pivot.
+* The **Wald** interval is symmetric around $\hat\alpha$, while the sampling distribution of $\hat\alpha=n/T$ is skewed (it behaves like the inverse of a Gamma variable) and biased upwards. For small $n$ this typically produces under-coverage (and a lower endpoint that can even be negative, which is impossible for $\alpha$); the "MissLow" and "MissHigh" columns show the asymmetry of the errors.
+* The **log-scale Wald** interval and the **likelihood-ratio** interval respect the shape of the distribution and are closer to the nominal level, but still approximate for small $n$. All methods converge to the same interval and the nominal coverage as $n$ grows.
+* **Length.** Intervals with lower coverage are shorter; compare lengths only among methods with similar coverage. The exact interval gives the right coverage at essentially the same length as the best asymptotic ones.
+* **Why asymptotic methods fail for small $n$:** the normal approximation to a skewed estimator, an estimated variance $\hat\alpha^2/n$ that is itself random and correlated with $\hat\alpha$, and the bias $\alpha/(n-1)$ of the MLE.
+
+## Sample size needed for a given precision
+
+The half-width of the Wald interval is $z\alpha/\sqrt n$. For a **relative** margin of error $\varepsilon$ (half-width $=\varepsilon\alpha$) we need
+$$
+n\approx\Big(\frac{z}{\varepsilon}\Big)^2 ,
+$$
+*independently of $\alpha$*. For an absolute margin $m$, $n\approx(z\alpha/m)^2$.
+
+```{r sample-size}
+z <- qnorm(1 - (1 - LEVEL) / 2)
+eps <- c(0.20, 0.10, 0.05, 0.02)
+ss <- data.frame(Relative_margin = eps, n_needed = ceiling((z / eps)^2),
+                 Absolute_margin_at_alpha_hat = eps * a_mle)
+knitr::kable(ss, digits = 3, caption = "Sample size needed for a given precision of alpha_hat")
+```
+
+Hence our sample of $n=$ `r n` observations gives a relative margin of error of about `r round(100 * z / sqrt(n), 1)`% for $\alpha$.
+
+# Conclusions
+
+1. **Problem and model.** We asked how top-heavy the wealth of billionaires is. Net worths above Forbes' \$1B cut-off were modelled by a Pareto distribution with known threshold $x_m=1$ and unknown tail index $\alpha$; concentration measures (top shares, Gini) are functions of $\alpha$.
+2. **Model fit.** The graphical diagnostics (log-histogram, log-log survival plot, QQ plot, ECDF), the AIC comparison with a truncated log-normal, the threshold-stability table and the bootstrap KS test (p-value `r round(p_boot, 4)`) assess the model. Report in your presentation where the plots depart from the line: typically at the lower end (rounding of fortunes near \$1B) and at the very top (few observations). The Pareto model is an approximation (principle 9.1); the threshold table shows how sensitive $\alpha$ is to where the power law is assumed to start.
+3. **Estimators.** The MLE $n/T$ is biased upward by the factor $n/(n-1)$; the UMVUE $(n-1)/T$ is the unique unbiased function of the complete sufficient statistic; $(n-2)/T$ minimises the MSE. We recommend the **UMVUE** (unbiased, MVUE) or the MLE (practically identical for $n=$ `r n`). The method of moments is inefficient and unreliable when $\alpha\le2$, as simulations confirmed.
+4. **Estimates.** $\hat\alpha_{ML}=$ `r round(a_mle, 3)` (SE `r round(a_mle/sqrt(n), 3)`), $\hat\alpha_{UMVUE}=$ `r round(a_u, 3)`. According to the model, the richest 1% of billionaires own about `r round(100*top_share(a_u, 0.01), 1)`% and the richest 10% about `r round(100*top_share(a_u, 0.10), 1)`% of the total billionaire wealth; the Gini coefficient within the billionaire class is about `r round(gini_par(a_u), 2)`. The values are compared with the observed shares in the table of Section 5.4.
+5. **Confidence intervals.** The exact `r 100*LEVEL`% interval for $\alpha$ is [`r round(al, 3)`, `r round(au, 3)`]. The coverage study shows that the exact interval attains the nominal coverage for all $n$, while the Wald interval is the least reliable for small $n$; for $n=$ `r n` all methods agree closely.
+6. **Sample size.** A relative margin of error of 5% for $\alpha$ requires about `r ceiling((z/0.05)^2)` observations.
+7. **Surprises/unexpected findings.** (Edit after reading your output.) For example: the dependence of $\hat\alpha$ on the threshold; the fact that the MLE is biased even though it is "the" standard estimator; the fact that the UMVUE does not attain the Cramér--Rao bound; and MoM breaking down when moments do not exist.
+8. **Limitations.** (i) Billionaires are not a random sample but nearly a complete list of a truncated population, and fortunes are not independent (families, shared companies); (ii) net worths are estimates made by Forbes, rounded to \$0.1B, and include valuation uncertainty and hidden wealth; (iii) the Pareto model describes the tail, and the bulk near \$1B departs from it; (iv) the results describe wealth *among billionaires only*, **not** the whole world's wealth distribution (which includes billions of people far below \$1B); (v) the data are a snapshot of 2021 (a year with unusually high stock markets), so the conclusions may not hold in other years.
+
+# References {-}
+
+* Forbes (2021). *The World's Billionaires 2021.* <https://www.forbes.com/billionaires/>
+* Roy, S. *Forbes Billionaires of 2021* (Kaggle dataset). <https://www.kaggle.com/datasets/roysouravcu/forbes-billionaires-of-2021>
+* Pareto, V. (1896). *Cours d'économie politique.*
+* Newman, M. E. J. (2005). Power laws, Pareto distributions and Zipf's law. *Contemporary Physics*, 46(5), 323--351.
+* Clauset, A., Shalizi, C. R., Newman, M. E. J. (2009). Power-law distributions in empirical data. *SIAM Review*, 51(4), 661--703.
+* Arnold, B. C. (2015). *Pareto Distributions* (2nd ed.). CRC Press.
+* Casella, G., Berger, R. L. (2002). *Statistical Inference* (2nd ed.). Duxbury.
+
+```{r session-info}
+sessionInfo()
+```

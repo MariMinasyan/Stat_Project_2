@@ -42,7 +42,7 @@ set.seed(SEED)
 
 * One observation is the net worth (in billions of USD) of one person on the Forbes 2021 list.Although Forbes includes everyone with a net worth of at least $1B, we restrict our sample to individuals with at least $4B, so the data are left-truncated at a chosen threshold $x_m = 4$ (billion USD) where the Pareto tail behavior holds. This is the exact situation where the Pareto model is natural, because a Pareto variable conditioned to exceed a higher threshold is again Pareto with the same $\alpha$. 
 * We treat the observations as i.i.d. from a Pareto distribution above $x_m$. This is an approximation: the list is a (near) census of billionaires rather than a random sample, and some fortunes are linked (families, shared companies). We discuss consequences in the conclusions.
-* Net worths are published rounded to \$0.1B, so there are many ties. We account for this in the goodness-of-fit test (rounded bootstrap samples) and examine sensitivity to the threshold.
+* Net worths are published rounded to \$0.1B, so there are many ties. We account for this in the goodness-of-fit test (rounded bootstrap samples).
 
 # 2. The Model
 
@@ -70,12 +70,10 @@ $$
 
 ## Why a Pareto model?
 
-* **Support and shape.** The data are positive, strongly right-skewed and truncated from below at \$4B.
+* **Support and shape.** The data are positive, strongly right-skewed and truncated from below at \$1B.
 * **Literature.** Power-law tails of wealth have been documented since Pareto (1896); see Newman (2005) and Clauset, Shalizi and Newman (2009).
 * **Mechanism.** Multiplicative growth with a lower reflecting barrier, or "rich get richer" processes, produce Pareto tails.
-* **Tail closure.** If wealth above some level is Pareto, wealth above any higher level is Pareto with the same $\alpha$. This gives us a natural *robustness check*: estimate $\alpha$ for different thresholds $u$.
-
-**Competing model.** We compare the Pareto with a **log-normal distribution left-truncated at \$4B** (the typical alternative for wealth and income data) using likelihood and AIC.
+* **Tail closure.** If wealth above some level is Pareto, wealth above any higher level is Pareto with the same $\alpha$.
 
 ## Functions of the parameter (derivations)
 
@@ -136,7 +134,7 @@ if (max(nw, na.rm = TRUE) > 1000) {
 name_col <- grep("^name$|person", names(raw), ignore.case = TRUE, value = TRUE)[1]
 if (!is.na(name_col)) cat("Duplicated names:", sum(duplicated(raw[[name_col]])), "\n")
 
-# --- 5. observations below the Forbes cut-off of $4B (should be none)
+# --- 5. observations below the Forbes cut-off of $4B 
 XM <- 4                                  # known truncation threshold ($4B)
 n_below <- sum(nw < XM, na.rm = TRUE)
 cat("Observations below the $4B threshold:", n_below, "\n")
@@ -166,17 +164,17 @@ With the threshold $x_m=4$ known, the MLE is $\hat\alpha=n/T$ (derived in Sectio
 
 ```{r helpers}
 # ---- Pareto functions ---------------------------------------------------
-dpareto <- function(x, alpha, xm = 1) ifelse(x < xm, 0, alpha * xm^alpha / x^(alpha + 1))
-ppareto <- function(x, alpha, xm = 1) ifelse(x < xm, 0, 1 - (xm / x)^alpha)
-qpareto <- function(p, alpha, xm = 1) xm * (1 - p)^(-1 / alpha)
-rpareto <- function(n, alpha, xm = 1) xm * runif(n)^(-1 / alpha)
+dpareto <- function(x, alpha, xm = 4) ifelse(x < xm, 0, alpha * xm^alpha / x^(alpha + 1))
+ppareto <- function(x, alpha, xm = 4) ifelse(x < xm, 0, 1 - (xm / x)^alpha)
+qpareto <- function(p, alpha, xm = 4) xm * (1 - p)^(-1 / alpha)
+rpareto <- function(n, alpha, xm = 4) xm * runif(n)^(-1 / alpha)
 
 # ---- estimators (xm known) ----------------------------------------------
-T_stat    <- function(x, xm = 1) sum(log(x / xm))
-alpha_mle <- function(x, xm = 1) length(x) / T_stat(x, xm)
-alpha_unb <- function(x, xm = 1) (length(x) - 1) / T_stat(x, xm)   # UMVUE
-alpha_mse <- function(x, xm = 1) (length(x) - 2) / T_stat(x, xm)   # minimum-MSE multiple of 1/T
-alpha_mom <- function(x, xm = 1) { m <- mean(x); m / (m - xm) }   # method of moments
+T_stat    <- function(x, xm = 4) sum(log(x / xm))
+alpha_mle <- function(x, xm = 4) length(x) / T_stat(x, xm)
+alpha_unb <- function(x, xm = 4) (length(x) - 1) / T_stat(x, xm)   # UMVUE
+alpha_mse <- function(x, xm = 4) (length(x) - 2) / T_stat(x, xm)   # minimum-MSE multiple of 1/T
+alpha_mom <- function(x, xm = 4) { m <- mean(x); m / (m - xm) }   # method of moments
 
 # ---- functions of alpha -------------------------------------------------
 top_share <- function(alpha, p) ifelse(alpha > 1, p^(1 - 1 / alpha), 1)
@@ -223,65 +221,7 @@ plot(ecdf(x), log = "x", verticals = FALSE, do.points = FALSE, col = "grey30", l
 curve(ppareto(x, alpha_hat, XM), add = TRUE, col = "red", lwd = 2, from = XM, to = max(x))
 ```
 
-**How to read the plots.** If $X$ is Pareto, then (a) $\ln(X/x_m)$ is exponential, (b) the log-log survival plot is a straight line with slope $-\alpha$, and (c) the Pareto QQ plot lies on the diagonal. Systematic bending of the points shows where the model fails (typically the bulk near \$1B, where the rounding to \$0.1B is coarse, or the very top where only a handful of points are observed).
-
-## Competing model: left-truncated log-normal
-
-```{r lognormal}
-nll_ln <- function(par, x) {
-  mu <- par[1]; s <- exp(par[2])
-  -sum(dlnorm(x, mu, s, log = TRUE) - plnorm(XM, mu, s, lower.tail = FALSE, log.p = TRUE))
-}
-fit_ln <- optim(c(0, 0), nll_ln, x = x, control = list(maxit = 5000, reltol = 1e-10))
-cat("Optimiser convergence code (0 = OK):", fit_ln$convergence, "\n")
-mu_ln <- fit_ln$par[1]; s_ln <- exp(fit_ln$par[2])
-
-ll_par <- n * log(alpha_hat) - alpha_hat * Tn - sum(log(x))   # Pareto log-likelihood (xm = 1 known)
-ll_ln  <- -fit_ln$value
-cmp <- data.frame(Model = c("Pareto (xm = 1 known)", "Log-normal truncated at 1"),
-                  Parameters = c(1, 2),
-                  logLik = c(ll_par, ll_ln),
-                  AIC = c(2 * 1 - 2 * ll_par, 2 * 2 - 2 * ll_ln))
-knitr::kable(cmp, digits = 2, caption = "Pareto against truncated log-normal")
-```
-
-```{r lognormal-plot}
-plot(xs, surv, log = "xy", pch = 16, cex = 0.5, col = "grey30",
-     xlab = "Net worth x (USD bn, log scale)", ylab = "P(X > x) (log scale)",
-     main = "Survival function: data, Pareto and truncated log-normal")
-curve(XM^alpha_hat * x^(-alpha_hat), add = TRUE, col = "red", lwd = 2, from = XM, to = max(x))
-curve(plnorm(x, mu_ln, s_ln, lower.tail = FALSE) / plnorm(XM, mu_ln, s_ln, lower.tail = FALSE),
-      add = TRUE, col = "blue", lwd = 2, from = XM, to = max(x))
-legend("bottomleft", legend = c("data", "Pareto", "truncated log-normal"),
-       col = c("grey30", "red", "blue"), pch = c(16, NA, NA), lty = c(NA, 1, 1), bty = "n")
-```
-
-The AIC (smaller is better) and the plot compare the two models. The log-normal has one more parameter and can be more flexible, so it can fit the bulk better; the question is which one describes the **upper tail**, which is what matters for concentration. We examine this next by varying the threshold.
-
-## Sensitivity to the threshold (tail-closure check)
-
-If the Pareto model is right above $\$4$B, then it is right above *any* higher threshold $u$ with the same $\alpha$. We fit $\alpha$ using only the observations $X\ge u$ (then $\ln(X/u)$ is again exponential given $X\ge u$).
-
-```{r threshold}
-thr <- c(1, 1.5, 2, 3, 5, 8, 10, 15)
-thr_tab <- do.call(rbind, lapply(thr, function(u) {
-  xu <- x[x >= u]; nu <- length(xu); Tu <- sum(log(xu / u))
-  a  <- nu / Tu
-  ci <- qchisq(c((1 - LEVEL) / 2, 1 - (1 - LEVEL) / 2), 2 * nu) / (2 * Tu)
-  data.frame(u = u, n_u = nu, alpha_hat = a, SE = a / sqrt(nu), CI_low = ci[1], CI_up = ci[2])
-}))
-knitr::kable(thr_tab, digits = 3, caption = "MLE of alpha for different thresholds u (exact 95% CIs)")
-```
-
-```{r threshold-plot}
-plot(thr_tab$u, thr_tab$alpha_hat, type = "b", pch = 16, log = "x", ylim = range(thr_tab[, c("CI_low", "CI_up")]),
-     xlab = "Threshold u (USD bn, log scale)", ylab = expression(hat(alpha)(u)),
-     main = "Stability of the tail index estimate")
-segments(thr_tab$u, thr_tab$CI_low, thr_tab$u, thr_tab$CI_up)
-abline(h = alpha_hat, lty = 2, col = "red")
-```
-
-A roughly horizontal curve supports the Pareto model; a drift indicates that the tail is not exactly Pareto (e.g. the bulk near \$1B is curved), and then the estimate depends on where we start the power law.
+**How to read the plots.** If $X$ is Pareto, then (a) $\ln(X/x_m)$ is exponential, (b) the log-log survival plot is a straight line with slope $-\alpha$, and (c) the Pareto QQ plot lies on the diagonal. Systematic bending of the points shows where the model fails (typically the bulk near the very top where only a handful of points are observed).
 
 ## Formal goodness-of-fit test (parametric bootstrap Kolmogorov--Smirnov)
 
@@ -315,13 +255,13 @@ We work with $x_m=1$ known (the Forbes cut-off), so there is one unknown paramet
 **Maximum likelihood.** The likelihood is $L(\alpha)=\alpha^n x_m^{n\alpha}\prod X_i^{-(\alpha+1)}$, so
 $$
 \ell(\alpha)=n\ln\alpha+n\alpha\ln x_m-(\alpha+1)\sum\ln X_i,\qquad
-\ell'(\alpha)=\frac n\alpha-T=0\ \Rightarrow\ \boxed{\hat\alpha_{ML}=\frac nT}.
+\ell'(\alpha)=\frac n\alpha-T=0\ \Rightarrow\ \boxed{\hat\alpha_{MLE}=\frac nT}.
 $$
-Since $\ell''(\alpha)=-n/\alpha^2<0$, this is a maximum. (When $x_m$ is unknown, the MLE of $x_m$ is $\min X_i$; see Section 5.5.)
+Since $\ell''(\alpha)=-n/\alpha^2<0$, this is a global maximum.
 
-**Method of moments.** From $E X=\alpha x_m/(\alpha-1)$ we get $\alpha=\bar X/(\bar X-x_m)$, hence
+**Method of moments.** From $E(X)=\alpha x_m/(\alpha-1)$ we get $\alpha=\bar X/(\bar X-x_m)$, hence
 $$
-\boxed{\tilde\alpha_{MM}=\frac{\bar X}{\bar X-x_m}}.
+\boxed{\bar\alpha_{MoM}=\frac{\bar X}{\bar X-x_m}}.
 $$
 This requires $\alpha>1$ for the first moment to exist.
 
@@ -619,12 +559,12 @@ Hence our sample of $n=$ `r n` observations gives a relative margin of error of 
 # Conclusions
 
 1. **Problem and model.** We asked how top-heavy the wealth of billionaires is. Net worths above Forbes' \$1B cut-off were modelled by a Pareto distribution with known threshold $x_m=4$ and unknown tail index $\alpha$; concentration measures (top shares, Gini) are functions of $\alpha$.
-2. **Model fit.** The graphical diagnostics (log-histogram, log-log survival plot, QQ plot, ECDF), the AIC comparison with a truncated log-normal, the threshold-stability table and the bootstrap KS test (p-value `r round(p_boot, 4)`) assess the model. Report in your presentation where the plots depart from the line: typically at the lower end (rounding of fortunes near \$1B) and at the very top (few observations). The Pareto model is an approximation (principle 9.1); the threshold table shows how sensitive $\alpha$ is to where the power law is assumed to start.
+2. **Model fit.** The graphical diagnostics (log-histogram, log-log survival plot, QQ plot, ECDF) and the bootstrap KS test (p-value `r round(p_boot, 4)`) assess the model. Report in your presentation where the plots depart from the line: typically at the lower end (rounding of fortunes near \$1B) and at the very top (few observations). The Pareto model is an approximation (principle 9.1), and no alternative model was fitted for comparison.
 3. **Estimators.** The MLE $n/T$ is biased upward by the factor $n/(n-1)$; the UMVUE $(n-1)/T$ is the unique unbiased function of the complete sufficient statistic; $(n-2)/T$ minimises the MSE. We recommend the **UMVUE** (unbiased, MVUE) or the MLE (practically identical for $n=$ `r n`). The method of moments is inefficient and unreliable when $\alpha\le2$, as simulations confirmed.
 4. **Estimates.** $\hat\alpha_{ML}=$ `r round(a_mle, 3)` (SE `r round(a_mle/sqrt(n), 3)`), $\hat\alpha_{UMVUE}=$ `r round(a_u, 3)`. According to the model, the richest 1% of billionaires own about `r round(100*top_share(a_u, 0.01), 1)`% and the richest 10% about `r round(100*top_share(a_u, 0.10), 1)`% of the total billionaire wealth; the Gini coefficient within the billionaire class is about `r round(gini_par(a_u), 2)`. The values are compared with the observed shares in the table of Section 5.4.
 5. **Confidence intervals.** The exact `r 100*LEVEL`% interval for $\alpha$ is [`r round(al, 3)`, `r round(au, 3)`]. The coverage study shows that the exact interval attains the nominal coverage for all $n$, while the Wald interval is the least reliable for small $n$; for $n=$ `r n` all methods agree closely.
 6. **Sample size.** A relative margin of error of 5% for $\alpha$ requires about `r ceiling((z/0.05)^2)` observations.
-7. **Surprises/unexpected findings.** (Edit after reading your output.) For example: the dependence of $\hat\alpha$ on the threshold; the fact that the MLE is biased even though it is "the" standard estimator; the fact that the UMVUE does not attain the Cramér--Rao bound; and MoM breaking down when moments do not exist.
+7. **Surprises/unexpected findings.** (Edit after reading your output.) For example: the fact that the MLE is biased even though it is "the" standard estimator; the fact that the UMVUE does not attain the Cramér--Rao bound; and MoM breaking down when moments do not exist.
 8. **Limitations.** (i) Billionaires are not a random sample but nearly a complete list of a truncated population, and fortunes are not independent (families, shared companies); (ii) net worths are estimates made by Forbes, rounded to \$0.1B, and include valuation uncertainty and hidden wealth; (iii) the Pareto model describes the tail, and the bulk near \$1B departs from it; (iv) the results describe wealth *among billionaires only*, **not** the whole world's wealth distribution (which includes billions of people far below \$1B); (v) the data are a snapshot of 2021 (a year with unusually high stock markets), so the conclusions may not hold in other years.
 
 # References {-}

@@ -23,7 +23,7 @@ SEED      <- 2026          # fixed seed for ALL simulations
 B_SIM     <- 5000          # replications in the simulation studies
 B_BOOT    <- 1000          # replications of the parametric bootstrap GOF test
 LEVEL     <- 0.95          # confidence level
-DATA_FILE <- "Billionaires.csv"   # put the Kaggle CSV next to this .Rmd
+DATA_FILE <- "Billionaire.csv"   # put the Kaggle CSV next to this .Rmd
 set.seed(SEED)
 ```
 
@@ -40,7 +40,7 @@ set.seed(SEED)
 
 **Data-generating mechanism and assumptions.**
 
-* One observation is the net worth (in billions of USD) of one person on the Forbes 2021 list. Forbes includes only people with net worth of at least \$4B, so the data are **left-truncated at a known threshold** $x_m = 1$ (billion USD). This is exactly the situation where the Pareto model is natural, because a Pareto variable conditioned to exceed a threshold is again Pareto with the same $\alpha$.
+* One observation is the net worth (in billions of USD) of one person on the Forbes 2021 list.Although Forbes includes everyone with a net worth of at least $1B, we restrict our sample to individuals with at least $4B, so the data are left-truncated at a chosen threshold $x_m = 4$ (billion USD) where the Pareto tail behavior holds. This is the exact situation where the Pareto model is natural, because a Pareto variable conditioned to exceed a higher threshold is again Pareto with the same $\alpha$. 
 * We treat the observations as i.i.d. from a Pareto distribution above $x_m$. This is an approximation: the list is a (near) census of billionaires rather than a random sample, and some fortunes are linked (families, shared companies). We discuss consequences in the conclusions.
 * Net worths are published rounded to \$0.1B, so there are many ties. We account for this in the goodness-of-fit test (rounded bootstrap samples) and examine sensitivity to the threshold.
 
@@ -57,25 +57,25 @@ Q(u)=x_m(1-u)^{-1/\alpha}.
 $$
 
 $$
-E X=\frac{\alpha x_m}{\alpha-1}\ (\alpha>1),\qquad
-\operatorname{Var}X=\frac{\alpha x_m^2}{(\alpha-1)^2(\alpha-2)}\ (\alpha>2).
+E(X)=\frac{\alpha x_m}{\alpha-1}\ (\alpha>1),\qquad
+\operatorname{Var(X)}=\frac{\alpha x_m^2}{(\alpha-1)^2(\alpha-2)}\ (\alpha>2).
 $$
 
 The mean is infinite for $\alpha\le 1$ and the variance is infinite for $\alpha\le 2$. This matters for the method of moments (Section 5).
 
-**Key fact used throughout.** If $X\sim\text{Pareto}(\alpha,x_m)$ then $\ln(X/x_m)\sim\text{Exp}(\text{rate }\alpha)$. Hence, for an i.i.d. sample,
+**Key fact used throughout.** If $X\sim\text{Pareto}(\alpha,x_m)$ then $\ln(X/x_m)\sim\text{Exp}(\alpha)$. Hence, for an i.i.d. sample,
 $$
-T=\sum_{i=1}^n \ln\frac{X_i}{x_m}\sim\text{Gamma}(n,\ \text{rate }\alpha),\qquad\text{equivalently}\qquad 2\alpha T\sim\chi^2_{2n}.
+T=\sum_{i=1}^n \ln\frac{X_i}{x_m}\sim\text{Gamma}(n,\alpha),\qquad\text{equivalently}\qquad 2\alpha T\sim\chi^2_{2n}.
 $$
 
 ## Why a Pareto model?
 
-* **Support and shape.** The data are positive, strongly right-skewed and truncated from below at \$1B.
+* **Support and shape.** The data are positive, strongly right-skewed and truncated from below at \$4B.
 * **Literature.** Power-law tails of wealth have been documented since Pareto (1896); see Newman (2005) and Clauset, Shalizi and Newman (2009).
 * **Mechanism.** Multiplicative growth with a lower reflecting barrier, or "rich get richer" processes, produce Pareto tails.
 * **Tail closure.** If wealth above some level is Pareto, wealth above any higher level is Pareto with the same $\alpha$. This gives us a natural *robustness check*: estimate $\alpha$ for different thresholds $u$.
 
-**Competing model.** We compare the Pareto with a **log-normal distribution left-truncated at \$1B** (the typical alternative for wealth and income data) using likelihood and AIC.
+**Competing model.** We compare the Pareto with a **log-normal distribution left-truncated at \$4B** (the typical alternative for wealth and income data) using likelihood and AIC.
 
 ## Functions of the parameter (derivations)
 
@@ -97,7 +97,7 @@ For $\alpha\le1$ the mean is infinite and $S(p)=1$ in the limit. $S(p)$ is a dec
 
 **One observation** = one billionaire on the 2021 list. **Population/context:** the world's billionaires as of the 2021 ranking. **Variable used:** `NetWorth`, the net worth in **billions of US dollars**. Additional variables (country, industry) are used only in a small supplementary comparison.
 
-> Download the CSV from Kaggle and place it in the same folder as this `.Rmd` (default name `Forbes Billionaires of 2021.csv`). The code below also searches the working directory for any file matching `forbes*.csv`.
+> Download the CSV from Kaggle and place it in the same folder as this `.Rmd` (default name `Billionaire.csv`). The code below also searches the working directory for any file matching `forbes*.csv`.
 
 ## Data import and preparation
 
@@ -139,14 +139,14 @@ if (!is.na(name_col)) cat("Duplicated names:", sum(duplicated(raw[[name_col]])),
 # --- 5. observations below the Forbes cut-off of $4B (should be none)
 XM <- 4                                  # known truncation threshold ($4B)
 n_below <- sum(nw < XM, na.rm = TRUE)
-cat("Observations below the $1B threshold:", n_below, "\n")
+cat("Observations below the $4B threshold:", n_below, "\n")
 
 x <- nw[!is.na(nw) & nw >= XM]
 n <- length(x)
 cat("Final sample size n =", n, "\n")
 ```
 
-**What we removed and why.** We removed only the `r n_na` observation(s) with a missing net worth and the `r n_below` observation(s) below \$1B (they contradict the definition of the list; the number is printed above). Nothing else was modified or deleted. (If both numbers are 0, the data were used exactly as published.)
+**What we removed and why.** We removed only the `r n_na` observation(s) with a missing net worth and the `r n_below` observation(s) below \$4B (they contradict the definition of the list; the number is printed above). Nothing else was modified or deleted.
 
 ```{r data-summary}
 summary(x)
@@ -162,7 +162,7 @@ cat("Share of observations equal to the minimum:", round(mean(x == min(x)), 3), 
 
 ## Fitted model used in the diagrams
 
-With the threshold $x_m=1$ known, the MLE is $\hat\alpha=n/T$ (derived in Section 5). We compute it here only to draw the diagnostic plots.
+With the threshold $x_m=4$ known, the MLE is $\hat\alpha=n/T$ (derived in Section 5). We compute it here only to draw the diagnostic plots.
 
 ```{r helpers}
 # ---- Pareto functions ---------------------------------------------------
@@ -260,7 +260,7 @@ The AIC (smaller is better) and the plot compare the two models. The log-normal 
 
 ## Sensitivity to the threshold (tail-closure check)
 
-If the Pareto model is right above $\$1$B, then it is right above *any* higher threshold $u$ with the same $\alpha$. We fit $\alpha$ using only the observations $X\ge u$ (then $\ln(X/u)$ is again exponential given $X\ge u$).
+If the Pareto model is right above $\$4$B, then it is right above *any* higher threshold $u$ with the same $\alpha$. We fit $\alpha$ using only the observations $X\ge u$ (then $\ln(X/u)$ is again exponential given $X\ge u$).
 
 ```{r threshold}
 thr <- c(1, 1.5, 2, 3, 5, 8, 10, 15)

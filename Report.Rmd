@@ -506,48 +506,133 @@ if (!is.na(cty_col)) {
 We generate samples **from the Pareto model** with known $\alpha_0$ and $x_m=1$, build the four intervals and record coverage and length. Sample sizes: $n=10,30,100,500$ and the real sample size. $B=$ `r B_SIM` replications (Monte Carlo standard error of a coverage near 0.95 is about $\sqrt{0.95\cdot0.05/B}\approx$ `r round(sqrt(.95*.05/B_SIM), 4)`).
 
 ```{r coverage}
-alpha_true <- alpha0                      # true value used in the study
+alpha.true <- alpha0
+conf.level <- LEVEL
+a <- 1 - conf.level
+z <- qnorm(1 - a / 2)
+
 ns_cov <- sort(unique(c(10, 30, 100, 500, n)))
 set.seed(SEED)
-cov_res <- do.call(rbind, lapply(ns_cov, function(nn) {
-  Tsim <- sim_stats(B_SIM, nn, alpha_true, XM)[, "T"]
-  methods <- list(Exact = ci_exact(Tsim, nn), Wald = ci_wald(Tsim, nn),
-                  `Wald (log)` = ci_logwald(Tsim, nn), `Likelihood ratio` = ci_lr(Tsim, nn))
-  do.call(rbind, lapply(names(methods), function(m) {
-    ci <- methods[[m]]
-    data.frame(n = nn, Method = m,
-               Coverage = mean(ci[, 1] <= alpha_true & alpha_true <= ci[, 2]),
-               AvgLength = mean(ci[, 2] - ci[, 1]),
-               MissLow = mean(ci[, 2] < alpha_true),    # interval entirely below truth
-               MissHigh = mean(ci[, 1] > alpha_true))   # interval entirely above truth
-  }))
-}))
+cov_res <- data.frame()
+
+for (nn in ns_cov) {
+  # Vectors to store lower and upper endpoints across B_SIM samples
+  lo_exact <- numeric(B_SIM); up_exact <- numeric(B_SIM)
+  lo_wald  <- numeric(B_SIM); up_wald  <- numeric(B_SIM)
+  
+  for (i in 1:B_SIM) {
+    x_sim <- rpareto(nn, alpha = alpha.true, xm = XM)
+    T_sim <- sum(log(x_sim / XM))
+    alpha_hat <- nn / T_sim
+    
+    # 1. Exact Pivot CI: 2 * alpha * T ~ Chi-squared(2n)
+    lo_exact[i] <- qchisq(a / 2, df = 2 * nn) / (2 * T_sim)
+    up_exact[i] <- qchisq(1 - a / 2, df = 2 * nn) / (2 * T_sim)
+    
+    # 2. Asymptotic Normal (Wald) CI: alpha_hat +- ME
+    ME <- z * alpha_hat / sqrt(nn)
+    lo_wald[i] <- alpha_hat - ME
+    up_wald[i] <- alpha_hat + ME
+  }
+  
+  # Record Exact results
+  cov_res <- rbind(cov_res, data.frame(
+    n         = nn,
+    Method    = "Exact",
+    Coverage  = mean(lo_exact <= alpha.true & alpha.true <= up_exact),
+    AvgLength = mean(up_exact - lo_exact),
+    MissLow   = mean(up_exact < alpha.true),
+    MissHigh  = mean(lo_exact > alpha.true)
+  ))
+  
+  # Record Asymptotic Normal (Wald) results
+  cov_res <- rbind(cov_res, data.frame(
+    n         = nn,
+    Method    = "Asymptotic Normal",
+    Coverage  = mean(lo_wald <= alpha.true & alpha.true <= up_wald),
+    AvgLength = mean(up_wald - lo_wald),
+    MissLow   = mean(up_wald < alpha.true),
+    MissHigh  = mean(lo_wald > alpha.true)
+  ))
+}
+
 knitr::kable(cov_res, digits = 4, row.names = FALSE,
-             caption = paste0("Empirical coverage (nominal ", LEVEL, ") and mean length; alpha0 = ", alpha_true))
+             caption = paste0("Empirical coverage (nominal ", LEVEL, ") and mean length; alpha0 = ", alpha.true))
 ```
 
 ```{r coverage-plot, fig.width=9, fig.height=4}
 par(mfrow = c(1, 2), mar = c(4.2, 4.2, 3, 1))
-mcols <- c(Exact = "black", Wald = "red", `Wald (log)` = "blue", `Likelihood ratio` = "darkgreen")
+mcols <- c(Exact = "black", `Asymptotic Normal` = "red")
+
 plot(NA, xlim = range(ns_cov), ylim = range(c(cov_res$Coverage, LEVEL)), log = "x",
      xlab = "n", ylab = "Empirical coverage", main = "Coverage probability")
-for (m in names(mcols)) with(subset(cov_res, Method == m), lines(n, Coverage, type = "b", pch = 16, col = mcols[m]))
+for (m in names(mcols)) {
+  sub_df <- cov_res[cov_res$Method == m, ]
+  lines(sub_df$n, sub_df$Coverage, type = "b", pch = 16, col = mcols[m])
+}
 abline(h = LEVEL, lty = 2)
 legend("bottomright", legend = names(mcols), col = mcols, pch = 16, lty = 1, bty = "n", cex = 0.8)
 
 plot(NA, xlim = range(ns_cov), ylim = range(cov_res$AvgLength), log = "xy",
      xlab = "n", ylab = "Average length", main = "Interval length")
-for (m in names(mcols)) with(subset(cov_res, Method == m), lines(n, AvgLength, type = "b", pch = 16, col = mcols[m]))
+for (m in names(mcols)) {
+  sub_df <- cov_res[cov_res$Method == m, ]
+  lines(sub_df$n, sub_df$AvgLength, type = "b", pch = 16, col = mcols[m])
+}
 par(mfrow = c(1, 1))
 ```
+```{r}
+set.seed(SEED)
+sample.size <- 50
+no.of.intervals <- 100
 
+par(mfrow = c(1, 2), mar = c(4.2, 4.2, 3, 1))
+
+# Left: Exact Pivot CI
+plot.new()
+plot.window(xlim = c(0, no.of.intervals), ylim = c(0.5, 2.5))
+axis(1); axis(2)
+title(paste0("95% Exact CI for alpha, n = ", sample.size))
+for (i in 1:no.of.intervals) {
+  x_sim <- rpareto(sample.size, alpha = alpha.true, xm = XM)
+  T_sim <- sum(log(x_sim / XM))
+  lo <- qchisq(a / 2, df = 2 * sample.size) / (2 * T_sim)
+  up <- qchisq(1 - a / 2, df = 2 * sample.size) / (2 * T_sim)
+  if (lo > alpha.true || up < alpha.true) {
+    segments(c(i), c(lo), c(i), c(up), col = "red", lwd = 1.5)
+  } else {
+    segments(c(i), c(lo), c(i), c(up), col = "black")
+  }
+}
+abline(h = alpha.true, lwd = 2, col = "blue")
+
+# Right: Asymptotic Normal (Wald) CI
+plot.new()
+plot.window(xlim = c(0, no.of.intervals), ylim = c(0.5, 2.5))
+axis(1); axis(2)
+title(paste0("95% Asymptotic CI for alpha, n = ", sample.size))
+for (i in 1:no.of.intervals) {
+  x_sim <- rpareto(sample.size, alpha = alpha.true, xm = XM)
+  alpha_hat <- sample.size / sum(log(x_sim / XM))
+  ME <- z * alpha_hat / sqrt(sample.size)
+  lo <- alpha_hat - ME
+  up <- alpha_hat + ME
+  if (lo > alpha.true || up < alpha.true) {
+    segments(c(i), c(lo), c(i), c(up), col = "red", lwd = 1.5)
+  } else {
+    segments(c(i), c(lo), c(i), c(up), col = "black")
+  }
+}
+abline(h = alpha.true, lwd = 2, col = "blue")
+
+par(mfrow = c(1, 1))
+```
 **Discussion (read together with the table above).**
 
-* The **exact** interval has coverage equal to the nominal level for every $n$ (up to Monte Carlo error), because it is based on a true pivot.
-* The **Wald** interval is symmetric around $\hat\alpha$, while the sampling distribution of $\hat\alpha=n/T$ is skewed (it behaves like the inverse of a Gamma variable) and biased upwards. For small $n$ this typically produces under-coverage (and a lower endpoint that can even be negative, which is impossible for $\alpha$); the "MissLow" and "MissHigh" columns show the asymmetry of the errors.
-* The **log-scale Wald** interval and the **likelihood-ratio** interval respect the shape of the distribution and are closer to the nominal level, but still approximate for small $n$. All methods converge to the same interval and the nominal coverage as $n$ grows.
-* **Length.** Intervals with lower coverage are shorter; compare lengths only among methods with similar coverage. The exact interval gives the right coverage at essentially the same length as the best asymptotic ones.
-* **Why asymptotic methods fail for small $n$:** the normal approximation to a skewed estimator, an estimated variance $\hat\alpha^2/n$ that is itself random and correlated with $\hat\alpha$, and the bias $\alpha/(n-1)$ of the MLE.
+* The **Exact** interval has coverage equal to the nominal level $0.95$ for every $n$ (up to Monte Carlo error) and balances its tail errors evenly (`MissLow` $\approx 2.5\%$, `MissHigh` $\approx 2.5\%$), because $2\alpha T \sim \chi^2_{2n}$ is an exact pivot.
+* The **Asymptotic Normal (Wald)** interval is symmetric around $\hat{\alpha}$, while the sampling distribution of $\hat{\alpha} = n/T$ is right-skewed and biased upwards by $\alpha/(n-1)$. For small $n$ ($n=10$), this produces noticeable asymmetry between `MissLow` and `MissHigh`.
+* **Convergence for large $n$:** Both methods converge to virtually the same coverage and interval length once $n \ge 100$, and are indistinguishable at our real sample size $n =$ `r n`.
+* **100-Interval Segment Plot ($n = 50$):** Across 100 simulated samples, roughly 95% of the intervals (black segments) bracket the true $\alpha_0$ (blue horizontal line), while roughly 5% (red segments) miss it, visually illustrating the frequentist meaning of confidence.
 
 ## Sample size needed for a given precision
 

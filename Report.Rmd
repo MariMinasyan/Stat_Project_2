@@ -477,16 +477,27 @@ Note that the 80/20 value $\alpha_{80/20}=$ `r round(alpha_8020, 3)` is `r if (a
 
 ```{r country}
 cty_col <- grep("country", names(raw), ignore.case = TRUE, value = TRUE)[1]
+
 if (!is.na(cty_col)) {
   d <- data.frame(x = nw, country = raw[[cty_col]])
   d <- d[!is.na(d$x) & d$x >= XM, ]
+  
+  # Pick the 3 countries with the largest number of billionaires
   top_c <- names(sort(table(d$country), decreasing = TRUE))[1:3]
-  cty <- do.call(rbind, lapply(top_c, function(cc) {
-    xc <- d$x[d$country == cc]; nc <- length(xc); Tc <- sum(log(xc / XM))
+  cty <- data.frame()
+  
+  for (cc in top_c) {
+    xc <- d$x[d$country == cc]
+    nc <- length(xc)
+    Tc <- sum(log(xc / XM))
     ci <- ci_exact(Tc, nc)
-    data.frame(Country = cc, n = nc, alpha_hat = nc / Tc, CI_low = ci[1], CI_up = ci[2])
-  }))
+    
+    row_c <- data.frame(Country = cc, n = nc, alpha_hat = nc / Tc, CI_low = ci[1], CI_up = ci[2])
+    cty <- rbind(cty, row_c)
+  }
+  
   knitr::kable(cty, digits = 3, caption = "Tail index by country (three largest groups); exact 95% CIs")
+}
 }
 ```
 

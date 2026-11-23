@@ -231,16 +231,16 @@ curve(ppareto(x, alpha_hat, XM), add = TRUE, col = "red", lwd = 2, from = XM, to
 * A small p-value is evidence against $H_0$. With $n$ in the thousands even tiny, practically unimportant departures are rejected, so the test **complements** the graphs and does not replace them (principle 9.1).
 
 ```{r ks-boot}
-ks_stat <- function(x, alpha, xm = 1) {
+ks_stat <- function(x, alpha, xm = 4) {
   x <- sort(x); n <- length(x); F <- ppareto(x, alpha, xm)
   max(pmax(abs((1:n) / n - F), abs(F - (0:(n - 1)) / n)))
 }
-D_obs <- ks_stat(x, alpha_hat, XM)
+D_obs <- ks_stat(x, alpha_hat, 4)
 set.seed(SEED)
 D_boot <- replicate(B_BOOT, {
-  xb <- round(rpareto(n, alpha_hat, XM), 1)
-  xb <- pmax(xb, XM)
-  ks_stat(xb, alpha_mle(xb, XM), XM)
+  xb <- round(rpareto(n, alpha_hat, 4), 1)
+  xb <- pmax(xb, 4)
+  ks_stat(xb, alpha_mle(xb, 4), 4)
 })
 p_boot <- (1 + sum(D_boot >= D_obs)) / (B_BOOT + 1)
 cat("Observed D =", round(D_obs, 4), "  bootstrap p-value =", round(p_boot, 4), "\n")
@@ -248,7 +248,7 @@ cat("Observed D =", round(D_obs, 4), "  bootstrap p-value =", round(p_boot, 4), 
 
 # 5. Estimators and Their Properties
 
-We work with $x_m=1$ known (the Forbes cut-off), so there is one unknown parameter $\alpha$. Recall $T=\sum\ln(X_i/x_m)\sim\text{Gamma}(n,\text{rate }\alpha)$.
+We work with $x_m=4$ known (the Forbes cut-off), so there is one unknown parameter $\alpha$. Recall $T=\sum\ln(X_i/x_m)\sim\text{Gamma}(n,\text{rate }\alpha)$.
 
 ## Construction
 
@@ -498,7 +498,7 @@ if (!is.na(cty_col)) {
   
   knitr::kable(cty, digits = 3, caption = "Tail index by country (three largest groups); exact 95% CIs")
 }
-}
+
 ```
 
 ## Simulation study of the coverage probability
